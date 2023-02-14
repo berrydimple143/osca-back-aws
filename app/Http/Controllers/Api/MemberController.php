@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\UsersExport;
 use Image;
+use chillerlan\QRCode\{QRCode, QROptions};
 
 class MemberController extends Controller
 {
@@ -22,7 +23,7 @@ class MemberController extends Controller
     }
     private function ordinalNumber($num)
     {
-        switch($num) 
+        switch($num)
         {
             case 1:  return $num.'st';
             case 2:  return $num.'nd';
@@ -32,7 +33,7 @@ class MemberController extends Controller
     }
     public function saveMemberTransaction(Request $request)
     {
-        try 
+        try
         {
             $id = $request->id;
             $admin = Auth::user();
@@ -46,7 +47,7 @@ class MemberController extends Controller
                 $ins = DB::table('member_card_transactions')->insert($data);
             DB::commit();
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -58,14 +59,14 @@ class MemberController extends Controller
         if($request->page == 'vaccine')
         {
             $filename = '';
-            try 
+            try
             {
                 $id = $request->id;
                 DB::beginTransaction();
                     $user = DB::table('user_vaccination')->where('user_id', $id)->first();
                     $usr = DB::table('users')->select('id_number')->where('id', $id)->first();
                 DB::commit();
-                if(!empty($user->vaccine_card)) 
+                if(!empty($user->vaccine_card))
                 {
                     $card = public_path('images/vaccine_cards/'.$user->vaccine_card);
                     if(file_exists($card)) {
@@ -77,14 +78,14 @@ class MemberController extends Controller
                 $img = Image::make($request->data)->resize(250, 200);
                 $fullPath = public_path('images/vaccine_cards/'.$filename);
                 $img->save($fullPath);
-                if(!empty($user->vaccine_card)) 
+                if(!empty($user->vaccine_card))
                 {
                     $upd = DB::table('user_vaccination')->where('user_id', $id)->update(['vaccine_card' => $filename]);
                 } else {
                     $ins = DB::table('user_vaccination')->insert(['vaccine_card' => $filename, 'user_id' => $id]);
                 }
                 $msg = 'success';
-            } catch (Exception $e) 
+            } catch (Exception $e)
             {
                 DB::rollBack();
                 $msg = $e->getMessage();
@@ -92,12 +93,12 @@ class MemberController extends Controller
             return response()->json(['upload_status' => $msg, 'filename' => $filename]);
         }
     }
-    public function getDosageLevel(Request $request) 
+    public function getDosageLevel(Request $request)
     {
         try {
             $level = DB::table('vaccination_dosage')->select('level')->get();
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -107,7 +108,7 @@ class MemberController extends Controller
             'level' => $level,
         ]);
     }
-    public function exportData(Request $request) 
+    public function exportData(Request $request)
     {
         if($request->mtype == 'municipality') {
             $filename = 'users_'.$request->mun.'.xlsx';
@@ -122,10 +123,11 @@ class MemberController extends Controller
             return response()->json('members.xlsx', 200);
         }
     }
-    
-    public function getCanvasData(Request $request) 
+
+    public function getCanvasData(Request $request)
     {
-        try 
+        $photo = $signature = $img = $img2 = $filename = "";
+        try
         {
             $id = $request->id;
             DB::beginTransaction();
@@ -139,29 +141,29 @@ class MemberController extends Controller
             $id_no = $usr->id_number;
             $qrImg = $id_no.'.png';
             $qrImg2 = $id_no.'_back.png';
-            if(!empty($user->qrcode)) 
+            if(!empty($user->qrcode))
             {
                 $qrpic = public_path('images/qrcodes/'.$user->qrcode);
-                if(file_exists($qrpic)) 
+                if(file_exists($qrpic))
                 {
                      unlink($qrpic);
                 }
             }
-            if(!empty($user->qrcode_back)) 
+            if(!empty($user->qrcode_back))
             {
                 $qrpicback = public_path('images/qrcodes/'.$user->qrcode_back);
-                if(file_exists($qrpicback)) 
+                if(file_exists($qrpicback))
                 {
                      unlink($qrpicback);
                 }
             }
-            if(!empty($user->qrcode)) 
+            if(!empty($user->qrcode))
             {
                 $upd = DB::table('user_qrcodes')->where('user_id', $id)->update(['qrcode' => $qrImg, 'qrcode_back' => $qrImg2]);
             } else {
                 $ins = DB::table('user_qrcodes')->insert(['qrcode' => $qrImg, 'qrcode_back' => $qrImg2, 'user_id' => $id]);
             }
-            
+
             $name = ucwords($usr->first_name." ". $usr->middle_name ." ". $usr->last_name);
             $bday = new Carbon($usrDetail->birth_date);
             $bday2 = $bday->format('m/d/Y');
@@ -172,74 +174,70 @@ class MemberController extends Controller
                 $address = "Brgy. ".$usrAddr->barangay_name.", ".$usrAddr->municipality_name.", ".$usrAddr->province_name;
             }
             $text = $id_no . '|' . $name. '|' . $address. '|'. $bday2. '|' . $issued2. '|'. $usrDetail->gender;
-            $qr = \QrCode::size(110)->format('png')->generate($text, public_path('images/qrcodes/'.$qrImg));
-            $img = asset('images/qrcodes/'.$qrImg);
-            
+            $img = (new QRCode)->render($text);
             $text2 = $request->host.'/admin/members/?code_number='.$id_no;
-            $qr2 = \QrCode::size(160)->format('png')->generate($text2, public_path('images/qrcodes/'.$qrImg2));
-            $img2 = asset('images/qrcodes/'.$qrImg2);
-            
-            $photo = $signature = "";
-            if(!empty($usrPhoto->filename)) 
+            $img2 = (new QRCode)->render($text2);
+
+            if(!empty($usrPhoto->filename))
             {
                 $photo = asset('images/profiles/'.$usrPhoto->filename);
             }
-            if(!empty($usrSignature->filename)) 
+            if(!empty($usrSignature->filename))
             {
                 $signature = asset('images/signatures/'.$usrSignature->filename);
             }
             $filename = $id_no.".jpg";
             $msg = 'successful';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
         }
         return response()->json([
             'print_status' => $msg,
-            'name' => $name, 
+            'name' => $name,
             'id' => $id_no,
             'photo' => $photo,
             'signature' => $signature,
             'address' => ucwords($address),
-            'img' => $img, 
-            'img2' => $img2, 
+            'img' => $img,
+            'img2' => $img2,
             'filename' => $filename,
             'gender' => $usrDetail->gender,
             'bday' => $bday->format('m-d-Y'),
             'issued' => $issued->format('m-d-Y')
         ]);
     }
-    
+
     public function vaccineIdCamera(Request $request)
     {
-        try 
+        try
         {
             $id = $request->id;
             DB::beginTransaction();
                 $user = DB::table('user_vaccination')->where('user_id', $id)->first();
                 $usr = DB::table('users')->select('id_number')->where('id', $id)->first();
             DB::commit();
-            if(!empty($user->vaccine_card)) 
+            if(!empty($user->vaccine_card))
             {
                 $card = public_path('images/vaccine_cards/'.$user->vaccine_card);
                 if(file_exists($card)) {
                      unlink($card);
-                }  
+                }
             }
             $now = Carbon::now()->format('Y-m-d-H-i-s');
             $filename = $usr->id_number.'-vaccine-card-'.$now.'.png';
             $img = Image::make($request->info)->resize(250, 200);
             $fullPath = public_path('images/vaccine_cards/'.$filename);
             $img->save($fullPath);
-            if(!empty($user->vaccine_card)) 
+            if(!empty($user->vaccine_card))
             {
                 $upd = DB::table('user_vaccination')->where('user_id', $id)->update(['vaccine_card' => $filename]);
             } else {
                 $ins = DB::table('user_vaccination')->insert(['vaccine_card' => $filename, 'user_id' => $id]);
             }
             $msg = 'successful';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -248,22 +246,22 @@ class MemberController extends Controller
             'camera_status' => $msg
         ]);
     }
-    
+
     public function userCamera(Request $request)
     {
-        try 
+        try
         {
             $id = $request->id;
             DB::beginTransaction();
                 $user = DB::table('user_photos')->where('user_id', $id)->first();
                 $usr = DB::table('users')->select('id_number')->where('id', $id)->first();
             DB::commit();
-            if(!empty($user->filename)) 
+            if(!empty($user->filename))
             {
                 $sign = public_path('images/profiles/'.$user->filename);
                 if(file_exists($sign)) {
                      unlink($sign);
-                }  
+                }
             }
             $cntr = 1;
             if(!empty($user->counter)) {
@@ -274,14 +272,14 @@ class MemberController extends Controller
             $img = Image::make($request->info)->fit(105);
             $fullPath = public_path('images/profiles/'.$filename);
             $img->save($fullPath);
-            if(!empty($user->filename)) 
+            if(!empty($user->filename))
             {
                 $upd = DB::table('user_photos')->where('user_id', $id)->update(['filename' => $filename, 'counter' => $cntr]);
             } else {
                 $ins = DB::table('user_photos')->insert(['filename' => $filename, 'counter' => $cntr, 'user_id' => $id]);
             }
             $msg = 'successful';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -290,20 +288,20 @@ class MemberController extends Controller
             'camera_status' => $msg
         ]);
     }
-    
-    public function userSignature(Request $request) 
+
+    public function userSignature(Request $request)
     {
         try {
             DB::beginTransaction();
                 $user = DB::table('user_signatures')->where('user_id', $request->id)->first();
                 $usr = DB::table('users')->select('id_number')->where('id', $request->id)->first();
             DB::commit();
-            if(!empty($user->filename)) 
+            if(!empty($user->filename))
             {
                 $sign = public_path('images/signatures/'.$user->filename);
                 if(file_exists($sign)) {
                      unlink($sign);
-                }  
+                }
             }
             $cntr = 1;
             if(!empty($user->counter)) {
@@ -314,14 +312,14 @@ class MemberController extends Controller
             $img = Image::make($request->info)->resize(200, 40);
             $fullPath = public_path('images/signatures/'.$filename);
             $img->save($fullPath);
-            if(!empty($user->filename)) 
+            if(!empty($user->filename))
             {
                 $upd = DB::table('user_signatures')->where('user_id', $request->id)->update(['filename' => $filename, 'counter' => $cntr]);
             } else {
                 $ins = DB::table('user_signatures')->insert(['filename' => $filename, 'counter' => $cntr, 'user_id' => $request->id]);
             }
             $msg = 'successful';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -330,8 +328,8 @@ class MemberController extends Controller
             'signature_status' => $msg
         ]);
     }
-    
-    public function saveVaccinationInfo(Request $request) 
+
+    public function saveVaccinationInfo(Request $request)
     {
         try {
             $id = $request->id;
@@ -348,11 +346,11 @@ class MemberController extends Controller
             {
                 $info = ['dose' => $request->dose, 'vaccine' => $request->vaccine, 'vaccine_card' => $filename, 'vaccination_date' => $request->formatted_vdate];
                 $card = public_path('images/vaccine_cards/'.$user_vac->vaccine_card);
-                if(file_exists($card)) 
+                if(file_exists($card))
                 {
                     unlink($card);
                 }
-            } else 
+            } else
             {
                 $info = ['dose' => $request->dose, 'vaccine' => $request->vaccine, 'vaccine_card' => $filename, 'vaccination_date' => $request->formatted_vdate, 'user_id' => $id];
             }
@@ -372,7 +370,7 @@ class MemberController extends Controller
                 $img->save($fullPath);
             }
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -381,8 +379,8 @@ class MemberController extends Controller
             'vaccine_status' => $msg
         ]);
     }
-    
-    public function updateMember(Request $request) 
+
+    public function updateMember(Request $request)
     {
         try {
             $values = [
@@ -423,7 +421,7 @@ class MemberController extends Controller
                     ->where('users.id', $request->id)->update($values);
             DB::commit();
             $msg = 'successful';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -441,7 +439,7 @@ class MemberController extends Controller
             $admin = Auth::user();
             $affected = DB::table('users')->where('id', $request->id)->update(['deleted_by' => $admin->id]);
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -455,7 +453,7 @@ class MemberController extends Controller
         $msg = "";
         $photo = null;
         $transactions = [];
-        try 
+        try
         {
             DB::beginTransaction();
             if($request->type == 'edit')
@@ -469,7 +467,7 @@ class MemberController extends Controller
                     ->join('contact_details', 'users.id', '=', 'contact_details.user_id')
                     ->select('users.id AS id', 'users.id_number AS id_number', 'users.last_name AS last_name', 'users.first_name AS first_name', 'users.middle_name AS middle_name', 'users.email AS email', DB::raw('DATE_FORMAT(user_details.birth_date, "%m-%d-%Y") as birth_date'), 'contact_details.phone AS phone', 'contact_details.mobile AS mobile', 'contact_details.contact_person AS contact_person', 'contact_details.contact_person_number AS contact_person_number', 'user_address.birth_place AS birth_place', 'user_address.address AS address', 'user_details.gender AS gender', 'user_details.civil_status AS civil_status', 'user_details.blood_type AS blood_type', 'user_details.religion AS religion', 'user_details.education AS education', 'user_details.employment_status AS employment_status', 'user_details.member_status AS member_status', 'user_benefits.gsis AS gsis', 'user_benefits.sss AS sss', 'user_benefits.tin AS tin', 'user_benefits.philhealth AS philhealth', 'user_benefits.pension AS pension', 'user_classification.classification AS classification', 'user_illness.sickness AS sickness')
                     ->where('users.id', $request->id)->first();
-            } else if($request->type == 'info') 
+            } else if($request->type == 'info')
             {
                 $user = DB::table('users')
                     ->join('user_address', 'users.id', '=', 'user_address.user_id')
@@ -488,12 +486,12 @@ class MemberController extends Controller
                                 ->where('user_id', $request->id)->get();
             }
             DB::commit();
-            if(!empty($user->photo)) 
+            if(!empty($user->photo))
             {
                 $photo = asset('images/profiles/'.$user->photo);
             }
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -508,14 +506,14 @@ class MemberController extends Controller
     public function getSpecificMunicipalities($mun)
     {
         $mun = DB::table('municipalities')->select('municipality_code_number', 'municipality_name')->orderBy('municipality_name')->get();
-        
+
         return response()->json([
             'status' => 'success',
             'mun' => $mun
         ]);
     }
-    
-    private function getMunicipalityArray($mun) 
+
+    private function getMunicipalityArray($mun)
     {
         $arr_mun = [];
         if($mun != "none") {
@@ -527,7 +525,7 @@ class MemberController extends Controller
         }
         return $arr_mun;
     }
-    
+
     public function getMembers(Request $request)
     {
         $user = Auth::user();

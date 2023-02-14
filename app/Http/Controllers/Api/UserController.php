@@ -28,11 +28,11 @@ class UserController extends Controller
                     ->join('roles', 'model_has_roles.role_id', '=', 'roles.id')
                     ->leftJoin('role_has_permissions', 'roles.id', '=', 'role_has_permissions.role_id')
                     ->leftJoin('permissions', 'role_has_permissions.permission_id', '=', 'permissions.id')
-                    ->select('users.id AS id', 'users.id_number AS id_number', 'users.first_name AS first_name', 'users.last_name AS last_name', 'users.email AS email', 'roles.name AS role', 'permissions.name AS permission')
+                    ->select('users.id AS id', 'users.id_number AS id_number', 'users.first_name AS first_name', 'users.last_name AS last_name', 'users.email AS email', 'users.status AS status', 'roles.name AS role', 'permissions.name AS permission')
                     ->whereNull('users.id_number')->whereNull('users.deleted_at')->orderBy('users.last_name')->get();
             DB::commit();
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -42,7 +42,7 @@ class UserController extends Controller
             'users' => $users
         ]);
     }
-    public function saveUser(Request $request) 
+    public function saveUser(Request $request)
     {
         try
         {
@@ -56,8 +56,8 @@ class UserController extends Controller
                 ]);
             DB::commit();
             $role = $request->role;
-            
-            if($role == "team lead" || $role == "encoder") 
+
+            if($role == "team lead" || $role == "encoder")
             {
                 $address = Address::create([
                     'user_id' => $user->id,
@@ -82,7 +82,7 @@ class UserController extends Controller
             'user' => $user
         ]);
     }
-    public function updateUser(Request $request) 
+    public function updateUser(Request $request)
     {
         $id = $request->id;
         $values = [
@@ -98,15 +98,15 @@ class UserController extends Controller
                 $role = Role::create(['name' => $request->role, 'guard_name' => 'web']);
             }
             $affectedRole = DB::table('model_has_roles')->where('model_id', $id)->update(['role_id' => $role->id]);
-            if($role->name == "team lead" || $role->name == "encoder") 
+            if($role->name == "team lead" || $role->name == "encoder")
             {
                 $affectedMun = DB::table('user_address')->where('user_id', $id)->update(['municipality' => $request->selected_municipalities]);
-            } else 
+            } else
             {
                 $affectedMun = DB::table('user_address')->where('user_id', $id)->update(['province' => null, 'province_name' => null, 'municipality' => null]);
             }
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -127,7 +127,7 @@ class UserController extends Controller
                     ->select('users.id AS id', 'users.first_name AS first_name', 'users.last_name AS last_name', 'users.middle_name AS middle_name', 'users.email AS email', 'roles.name AS role', 'user_address.municipality AS municipality')->where('users.id', $request->id)->first();
             DB::commit();
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -146,7 +146,7 @@ class UserController extends Controller
             $admin = Auth::user();
             $affected = DB::table('users')->where('id', $request->id)->update(['deleted_by' => $admin->id]);
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -171,10 +171,10 @@ class UserController extends Controller
                     if(DB::table('users')->where('email', '!=', $oldEmail)->where('email', $request->email)->exists()) {
                         $msg = 'found';
                     }
-                    
+
                 }
             DB::commit();
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -186,7 +186,7 @@ class UserController extends Controller
     }
     public function changePassword(Request $request)
     {
-        try 
+        try
         {
             DB::beginTransaction();
                 if($request->type == "admin") {
@@ -197,7 +197,7 @@ class UserController extends Controller
                 }
             DB::commit();
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -210,16 +210,16 @@ class UserController extends Controller
     {
         $admin = Auth::user();
         $msg = 'not match';
-        try 
+        try
         {
             DB::beginTransaction();
                 $user = DB::table('users')->where('id', $admin->id)->first();
             DB::commit();
-            if (Hash::check($request->password, $user->password)) 
+            if (Hash::check($request->password, $user->password))
             {
                 $msg = 'match';
             }
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -228,15 +228,15 @@ class UserController extends Controller
             'password_status' => $msg
         ]);
     }
-    public function getUserStatus(Request $request) 
+    public function getUserStatus(Request $request)
     {
-        try 
+        try
         {
             DB::beginTransaction();
                 $user = DB::table('users')->select('status')->where('id', $request->id)->first();
             DB::commit();
             $msg = $user->status;
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
@@ -245,21 +245,21 @@ class UserController extends Controller
             'user_status' => $msg
         ]);
     }
-    public function activateAccount(Request $request) 
+    public function activateAccount(Request $request)
     {
-        try 
+        try
         {
             DB::beginTransaction();
-                if($request->status == 0 || $request->status == '0' || $request->status == false) 
+                if($request->status == 0 || $request->status == '0' || $request->status == false)
                 {
                     $updated = DB::table('users')->where('id', $request->id)->update(['status' => true]);
-                } else 
+                } else
                 {
                     $updated = DB::table('users')->where('id', $request->id)->update(['status' => false]);
                 }
             DB::commit();
             $msg = 'success';
-        } catch (Exception $e) 
+        } catch (Exception $e)
         {
             DB::rollBack();
             $msg = $e->getMessage();
